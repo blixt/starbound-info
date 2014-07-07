@@ -1,0 +1,208 @@
+import hashlib
+import binascii
+import io
+import os
+import struct
+import zlib
+
+from . import btreedb4
+from . import sbvj01
+from . import sbon
+
+
+# Override range with xrange when running Python 2.x.
+try:
+    range = xrange
+except:
+    pass
+
+
+class KeyStore(btreedb4.FileBTreeDB4):
+    """A B-tree database that uses SHA-256 hashes for key lookup.
+
+    """
+    def encode_key(self, key):
+        return hashlib.sha256(key.encode('utf-8')).digest()
+
+
+class KeyStoreCompressed(KeyStore):
+    """A B-tree database that uses SHA-256 hashes for key lookup, and inflates
+    the data before returning it.
+
+    """
+    def deserialize_data(self, data):
+        return zlib.decompress(data)
+
+
+class CelestialChunks(KeyStoreCompressed):
+    def deserialize_data(self, data):
+        data = super(CelestialChunks, self).deserialize_data(data)
+        stream = io.BytesIO(data)
+        return sbon.read_document(stream)
+
+    def initialize(self):
+        super(CelestialChunks, self).initialize()
+        assert self.identifier == 'Celestial2', 'Unsupported celestial chunks file'
+
+
+class Package(KeyStore):
+    """A B-tree database representing a package of files.
+
+    """
+    DIGEST_KEY = '_digest'
+    INDEX_KEY = '_index'
+
+    def __init__(self, path):
+        super(Package, self).__init__(path)
+        self._index = None
+
+    def encode_key(self, key):
+        return super(Package, self).encode_key(key.lower())
+
+    def get_digest(self):
+        return self.get(Package.DIGEST_KEY)
+
+    def get_index(self):
+        if self._index:
+            return self._index
+
+        stream = io.BytesIO(self.get(Package.INDEX_KEY))
+        if self.identifier == 'Assets1':
+            self._index = sbon.read_string_list(stream)
+        elif self.identifier == 'Assets2':
+            self._index = sbon.read_string_digest_map(stream)
+
+        return self._index
+
+
+class VariantDatabase(KeyStoreCompressed):
+    """A B-tree database where each key is a SHA-256 hash and the value is
+    compressed Starbound Variant data.
+
+    """
+    def deserialize_data(self, data):
+        data = super(VariantDatabase, self).deserialize_data(data)
+        stream = io.BytesIO(data)
+        return sbon.read_dynamic(stream)
+
+    def encode_key(self, key):
+        # TODO: The key encoding for this may be SBON-encoded SHA-256 hash.
+        return super(VariantDatabase, self).encode_key(key)
+
+    def initialize(self):
+        super(VariantDatabase, self).initialize()
+        assert self.identifier == 'JSON1', 'Unsupported variant database'
+
+
+class Player(sbvj01.FileSBVJ01):
+    """A Starbound character.
+
+    """
+    def __init__(self, path):
+        super(Player, self).__init__(path)
+        self.name = None
+
+    def initialize(self):
+        super(Player, self).initialize()
+        assert self.identifier == 'PlayerEntity', 'Invalid player file'
+        self.name = self.data['identity']['name']
+
+
+class World(btreedb4.FileBTreeDB4):
+    """A single Starbound world.
+
+    """
+    METADATA_KEY = (0, 0, 0)
+
+    TILES_X = 32
+    TILES_Y = 32
+    TILES_PER_REGION = TILES_X * TILES_Y
+
+    def __init__(self, stream):
+        super(World, self).__init__(stream)
+        self._metadata = None
+        self._metadata_version = None
+
+    def deserialize_data(self, data):
+        return zlib.decompress(data)
+
+    def encode_key(self, key):
+        return struct.pack('>BHH', *key)
+
+    def get_entities(self, x, y):
+        stream = io.BytesIO(self.get((2, x, y)))
+        return sbon.read_document_list(stream)
+
+    def get_metadata(self):
+        if self._metadata:
+            return self._metadata, self._metadata_version
+
+        stream = io.BytesIO(self.get_raw(World.METADATA_KEY))
+
+        # Not sure what these values mean.
+        unknown_1, unknown_2 = struct.unpack('>ii', stream.read(8))
+
+        name, version, data = sbon.read_document(stream)
+        assert name == 'WorldMetadata', 'Invalid world data'
+
+        self._metadata = data
+        self._metadata_version = version
+
+        return data, version
+
+    def get_tiles(self, x, y):
+        stream = io.BytesIO(self.get((1, x, y)))
+        unknown = stream.read(3)
+        # There are 1024 (32x32) tiles in a region.
+        return [sbon.read_tile(stream) for _ in range(World.TILES_PER_REGION)]
+
+    def initialize(self):
+        super(World, self).initialize()
+        assert self.identifier == 'World2', 'Tried to open non-world BTreeDB4 file'
+
+
+class FailedWorld(World):
+    def __init__(self, stream):
+        super(FailedWorld, self).__init__(stream)
+        self.repair = True
+
+    def get_metadata(self):
+        try:
+            stream = io.BytesIO(self.get_raw(World.METADATA_KEY))
+        except:
+            stream = btreedb4.LeafReader.last_buffer
+            stream.seek(0)
+
+        # Not sure what these values mean.
+        unknown_1, unknown_2 = struct.unpack('>ii', stream.read(8))
+
+        name, version, data = sbon.read_document(stream, True)
+        assert name == 'WorldMetadata', 'Invalid world data'
+
+        self._metadata = data
+        self._metadata_version = version
+
+        return data, version
+
+
+def open(path):
+    _, extension = os.path.splitext(path)
+    if extension == '.chunks':
+        file = CelestialChunks.open(path)
+    elif extension in ('.clientcontext', '.dat'):
+        file = sbvj01.FileSBVJ01.open(path)
+    elif extension == '.db':
+        file = VariantDatabase.open(path)
+    elif extension == '.fail':
+        file = FailedWorld.open(path)
+    elif extension in ('.modpak', '.pak'):
+        file = Package.open(path)
+    elif extension == '.player':
+        file = Player.open(path)
+    elif extension in ('.shipworld', '.world'):
+        file = World.open(path)
+    else:
+        raise ValueError('Unrecognized file extension')
+
+    file.initialize()
+    return file
