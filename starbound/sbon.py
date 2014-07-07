@@ -161,6 +161,8 @@ def write_varlen_number(stream, value):
         if len(pieces):
             x |= 0b10000000
         pieces.insert(0, x)
+        if len(pieces) > 4096:
+            raise ValueError('Number too large')
 
     stream.write(struct.pack('%dB' % len(pieces), *pieces))
 
