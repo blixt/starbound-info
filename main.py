@@ -74,6 +74,18 @@ class HomeHandler(webapp2.RequestHandler):
             'For example, a <code>.world</code> or <code>.player</code> file.</li>'
             '<li><a href="/repair">Attempt to restore a broken world</a><br>'
             'Try to repair a world by providing the <code>.fail</code> file.</li>'
+            '</ul>'
+            '<h2>External links</h2>'
+            '<ul>'
+            '<li><a href="http://blixt.github.io/starbounded/">Render a world in your browser '
+            '<span class="glyphicon glyphicon-new-window"></span></a><br>This will try to render '
+            'your world similar to what it looks like in-game.</li>'
+            '<li><a href="https://github.com/blixt/py-starbound">Browse Python modules and '
+            'command line tools for Starbound <span class="glyphicon glyphicon-new-window">'
+            '</span></a><br>GitHub page for the Python tools that power this site and more.</li>'
+            '<li><a href="https://github.com/blixt/starbound-info">Browse the source code of this '
+            'site <span class="glyphicon glyphicon-new-window"></span></a><br>'
+            'The GitHub page for the code that runs this site.</li>'
             '</ul>')
 
 class RepairHandler(webapp2.RequestHandler):
