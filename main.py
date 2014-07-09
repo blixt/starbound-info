@@ -145,10 +145,15 @@ class RepairHandler(webapp2.RequestHandler):
     def post(self):
         # Attempt to load the failed world.
         try:
-            fail_filename = self.request.POST.get('fail').filename
+            fail_field = self.request.POST.get('fail')
+            if not isinstance(fail_field, cgi.FieldStorage):
+                raise ValueError('No file was provided')
+
+            fail_filename = fail_field.filename
             if not fail_filename.endswith('.fail'):
-                raise Exception('File (%s) did not end with ".fail"' % fail_filename)
-            fail_file = starbound.FailedWorld(io.BytesIO(self.request.get('fail')))
+                raise ValueError('File (%s) did not end with ".fail"' % fail_filename)
+
+            fail_file = starbound.FailedWorld(fail_field.file)
             fail_file.initialize()
         except Exception as e:
             return error_with_back('Failed to load file: %s' % e.message,
@@ -156,8 +161,9 @@ class RepairHandler(webapp2.RequestHandler):
 
         # Load the "fresh" world to use as a fallback for missing data in the failed world.
         try:
-            world_filename = self.request.POST.get('world').filename
-            world_file = starbound.World(io.BytesIO(self.request.get('world')))
+            world_field = self.request.POST.get('world')
+            world_filename = world_field.filename
+            world_file = starbound.World(world_field.file)
             world_file.initialize()
         except:
             world_filename = None
