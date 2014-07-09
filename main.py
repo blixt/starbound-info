@@ -206,6 +206,7 @@ class RepairHandler(webapp2.RequestHandler):
 
         # Store the repaired world.
         with gcs.open(get_gcs_path_for_world(world_id), 'w') as f:
+            output.seek(0)
             shutil.copyfileobj(output, f)
 
         content = (
