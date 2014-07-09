@@ -4,6 +4,7 @@ import json
 import os.path
 import random
 import re
+import shutil
 
 import cloudstorage as gcs
 import webapp2
@@ -12,6 +13,7 @@ from google.appengine.api import app_identity
 
 import simplesite
 import starbound
+import starbound.repair
 
 simplesite.TITLE = 'Starbound utilities'
 simplesite.MENU = [
@@ -27,7 +29,8 @@ def get_gcs_path_for_world(world_id):
     return '%s/%s.world' % (GCS_BUCKET, world_id)
 
 def get_world_filename(world_id):
-    return '%s.world' % world_id.split('-')[1]
+    filename = '%s.world' % world_id.split('-')[1]
+    return filename.encode('utf-8')
 
 def error_with_back(message, path):
     return dict(message=message,
@@ -85,9 +88,15 @@ class DataHandler(webapp2.RequestHandler):
 class DownloadHandler(webapp2.RequestHandler):
     def get(self):
         world_id = self.request.get('world')
+
+        # Tell the browser to download the file as binary.
         filename = get_world_filename(world_id)
-        gcs_path = get_gcs_path_for_world(world_id)
-        self.response.write('this will be %s from %s' % (filename, gcs_path))
+        self.response.headers['Content-Type'] = 'application/octet-stream'
+        self.response.headers['Content-Disposition'] = 'attachment; filename="%s"' % filename
+
+        # Load the file and output it.
+        with gcs.open(get_gcs_path_for_world(world_id), 'r') as f:
+            shutil.copyfileobj(f, self.response)
 
 class HomeHandler(webapp2.RequestHandler):
     @simplesite.page('Home')
@@ -169,15 +178,21 @@ class RepairHandler(webapp2.RequestHandler):
             world_filename = None
             world_file = None
 
-        message_level = None
-        message = None
+        warnings = []
 
         if world_filename and not fail_filename.startswith(world_filename):
-            message_level = 'warning'
-            message = ('It looks as if the fail filename (%s) does not start with the provided '
-                       'world filename (%s). If the files are for different worlds, you may get '
-                       'very strange results!' % (cgi.escape(fail_filename),
-                                                  cgi.escape(world_filename)))
+            warnings.append('It looks as if the fail filename (%s) does not start with the '
+                            'provided world filename (%s). If the files are for different worlds, '
+                            'you may get very strange results!' % (cgi.escape(fail_filename),
+                                                                   cgi.escape(world_filename)))
+
+        # Attempt to perform the actual repair.
+        try:
+            output, repair_warnings = starbound.repair.repair_world(fail_file, world_file)
+            warnings.extend(repair_warnings)
+        except Exception as e:
+            return error_with_back('Sorry, failed to repair world: %s' % e.message,
+                                   '/repair')
 
         # Create a unique id for the repaired world.
         world_id = '-'.join([
@@ -190,7 +205,7 @@ class RepairHandler(webapp2.RequestHandler):
 
         # Store the repaired world.
         with gcs.open(get_gcs_path_for_world(world_id), 'w') as f:
-            f.write(self.request.get('fail'))
+            shutil.copyfileobj(output, f)
 
         content = (
             '<p>The repair process has finished. Hopefully your world has been successfully '
@@ -199,7 +214,7 @@ class RepairHandler(webapp2.RequestHandler):
             '</span> %(filename)s</a></p>' % dict(world_id=cgi.escape(world_id),
                                                   filename=cgi.escape(get_world_filename(world_id))))
 
-        return dict(content=content, message=message, message_level=message_level)
+        return dict(content=content, message=warnings, message_level='warning')
 
 app = webapp2.WSGIApplication([
     ('/', HomeHandler),

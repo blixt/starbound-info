@@ -53,6 +53,11 @@ def page(title):
                     else:
                         message_title = 'Info'
 
+                if isinstance(message, list):
+                    message_html = '<br>'.join(map(message, cgi.escape))
+                else:
+                    message_html = cgi.escape(message)
+
                 self.response.write(
                     '<div class="panel panel-%(level)s">'
                     '<div class="panel-heading">'
@@ -61,7 +66,7 @@ def page(title):
                     '<div class="panel-body">%(message)s</div>'
                     '</div>' % dict(level=cgi.escape(message_level),
                                     title=cgi.escape(message_title),
-                                    message=cgi.escape(message)))
+                                    message=message_html))
 
             content = values.get('content')
             if content:
