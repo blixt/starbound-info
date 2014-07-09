@@ -18,6 +18,7 @@ simplesite.MENU = [
     ('Home', '/'),
     ('View data', '/data'),
     ('Repair', '/repair'),
+    ('Report an issue', 'https://github.com/blixt/starbound-info/issues'),
 ]
 
 GCS_BUCKET = '/' + app_identity.get_default_gcs_bucket_name()
