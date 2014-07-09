@@ -111,7 +111,7 @@ class HomeHandler(webapp2.RequestHandler):
             '</span></a><br>GitHub page for the Python tools that power this site and more.</li>'
             '<li><a href="https://github.com/blixt/starbound-info">Browse the source code of this '
             'site <span class="glyphicon glyphicon-new-window"></span></a><br>'
-            'The GitHub page for the code that runs this site.</li>'
+            'The GitHub page for this site. Go here to report issues or suggest improvements.</li>'
             '</ul>')
 
 class RepairHandler(webapp2.RequestHandler):
