@@ -57,9 +57,12 @@ class DataHandler(webapp2.RequestHandler):
     @simplesite.page('View data')
     def post(self):
         try:
-            filename = self.request.POST.get('file').filename
+            file_field = self.request.POST.get('file')
+            if not isinstance(file_field, cgi.FieldStorage):
+                raise ValueError('No file was provided')
+            filename = file_field.filename
             file = starbound.read_stream(
-                io.BytesIO(self.request.get('file')),
+                file_field.file,
                 os.path.splitext(filename)[1][1:])
         except Exception as e:
             return error_with_back('Failed to load file: %s' % e.message,
