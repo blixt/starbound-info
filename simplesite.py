@@ -48,6 +48,8 @@ def page(title):
                 if not message_title:
                     if message_level == 'danger':
                         message_title = 'Error'
+                    elif message_level == 'warning':
+                        message_title = 'Warning'
                     else:
                         message_title = 'Info'
 
