@@ -54,7 +54,7 @@ def page(title):
                         message_title = 'Info'
 
                 if isinstance(message, list):
-                    message_html = '<br>'.join(map(message, cgi.escape))
+                    message_html = '<br>'.join(map(cgi.escape, message))
                 else:
                     message_html = cgi.escape(message)
 
