@@ -28,7 +28,7 @@ def page(title):
                 '<html>'
                 '<head>'
                 '<title>%(title)s</title>'
-                '<link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">'
+                '<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">'
                 '</head>'
                 '<body>'
                 '<div class="container">'
